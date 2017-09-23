@@ -13,6 +13,7 @@ var S3Sync = klass(function (config, options) {
   this.options = options
   AWS.config.accessKeyId = config.key
   AWS.config.secretKeyId = config.secret
+  AWS.config.region = config.region || 'us-east-1'
   this.client = new AWS.S3()
   this.bucket = config.bucket
   this.path = options.path
