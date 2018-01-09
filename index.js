@@ -19,8 +19,9 @@ var S3Sync = klass(function (config, options) {
   this.path = options.path
   this.prefix = options.prefix || ''
   this.digest = options.digest
-  this._inProgress = false
   this._files = []
+  this._currentBatch = []
+  this._completedFiles = []
   this._digest = {}
   this._timer
 })
@@ -41,6 +42,7 @@ var S3Sync = klass(function (config, options) {
     , 'scss': 'utf8'
     , 'png': 'binary'
     , 'jpg': 'binary'
+    , 'webp': 'binary'
     , 'jpeg': 'binary'
     , 'gif': 'binary'
     , 'ico': 'binary'
@@ -72,15 +74,17 @@ var S3Sync = klass(function (config, options) {
           this.options.complete && this.options.complete(err)
         }.bind(this))
       }
-      else if (this._inProgress) (this._timer = setTimeout(this.start.bind(this), 50))
+      else if (this._currentBatch.length) (this._timer = setTimeout(this.start.bind(this), 50))
       else {
         if (this.options.digestOnly) {
           this._addToDigest(this._files.pop())
           this.start()
         }
         else {
-          this._inProgress = true
-          this.put(this._files.pop(), this.handlePutResponse.bind(this))
+          this._currentBatch = this._files.slice(0, 5)
+          for (var i=0; i < this._currentBatch.length; i++) {
+            this.put(this._files.pop(), this.handlePutResponse.bind(this))
+          }
         }
       }
     }
@@ -140,7 +144,7 @@ var S3Sync = klass(function (config, options) {
             Bucket: this.bucket,
             Key: md5File
           }, md5headers))
-          .send(function(err, data) {
+          .send(function (err, data) {
             if (err) {
               console.error('error in putting new file', err)
               done(err)
@@ -183,7 +187,7 @@ var S3Sync = klass(function (config, options) {
         this.abort(error)
       }
       else {
-        this._inProgress = false
+        this._currentBatch.pop()
         this.start()
       }
     }
