@@ -19,6 +19,7 @@ var S3Sync = klass(function (config, options) {
   this.path = options.path
   this.prefix = options.prefix || ''
   this.digest = options.digest
+  this.currentDigest = options.currentDigest
   this._files = []
   this._currentBatch = []
   this._completedFiles = []
@@ -77,13 +78,27 @@ var S3Sync = klass(function (config, options) {
       else if (this._currentBatch.length) (this._timer = setTimeout(this.start.bind(this), 50))
       else {
         if (this.options.digestOnly) {
-          this._addToDigest(this._files.pop())
+          var file = this._files.pop()
+          var o = this._addToDigest(file)
+          console.log(o.file, o.md5)
+          if (this.currentDigest[o.file] == o.md5) {
+            console.log('file already exists in asset', file)
+          } else {
+            console.log('uploading new file to aws')
+          }
           this.start()
         }
         else {
           this._currentBatch = this._files.slice(0, 5)
-          for (var i=0; i < this._currentBatch.length; i++) {
-            this.put(this._files.pop(), this.handlePutResponse.bind(this))
+          for (var i=0, len = this._currentBatch.length; i < len; i++) {
+            var file = this._files.pop()
+            var o = this._addToDigest(file)
+            if (this.currentDigest[o.file] == o.md5) {
+              this._currentBatch.pop()
+              this.start()
+            } else {
+              this.put(file, this.handlePutResponse.bind(this))
+            }
           }
         }
       }
@@ -108,7 +123,6 @@ var S3Sync = klass(function (config, options) {
       return up.replace(/(\.\w+)$/, '-' + hash + '$1')
     }
   , put: function (file, done) {
-      this._addToDigest(file)
 
       var s3FileName = file.substring(this.path.length)
         , s3FileNameWithPrefix = this.prefix + s3FileName
@@ -208,6 +222,10 @@ var S3Sync = klass(function (config, options) {
         , s3FileName = file.substring(this.path.length)
 
       this._digest[s3FileName] = md5File
+      return {
+        file: s3FileName,
+        md5: md5File
+      }
     }
   })
 
